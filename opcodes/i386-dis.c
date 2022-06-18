@@ -38,7 +38,7 @@
 #include "opcode/i386.h"
 #include "libiberty.h"
 #include "safe-ctype.h"
-
+#include <assert.h>
 #include <setjmp.h>
 typedef struct instr_info instr_info;
 
@@ -164,6 +164,9 @@ struct instr_info
   /* Flags for EVEX bits which we somehow handled when printing the
      current instruction.  */
   int evex_used;
+
+  /* Flag if SSE2 is used.  */
+  int sse2_used;
 
   char obuf[100];
   char *obufp;
@@ -2462,6 +2465,19 @@ static const char *const att_names_xmm[] = {
   "%xmm24", "%xmm25", "%xmm26", "%xmm27",
   "%xmm28", "%xmm29", "%xmm30", "%xmm31"
 };
+
+
+static const char *const att_names_sse2_xmm[] = {
+  "%xmm0", "%xmm1", "%xmm2", "%xmm3",
+  "%xmm4", "%xmm5", "%xmm6", "%xmm7",
+  "%xmm8", "%xmm9", "%xmm10", "%xmm11",
+  "%xmm12", "%xmm13", "%xmm14", "%xmm15",
+  "%xmm16", "%xmm17", "%xmm18", "%xmm19",
+  "%xmm20", "%xmm21", "%xmm22", "%xmm23",
+  "%xmm24", "%xmm25", "%xmm26", "%xmm27",
+  "%xmm28", "%xmm29", "%xmm30", "%xmm31"
+};
+
 
 static const char *const att_names_ymm[] = {
   "%ymm0", "%ymm1", "%ymm2", "%ymm3",
@@ -9376,6 +9392,7 @@ print_insn (bfd_vma pc, disassemble_info *info, int intel_syntax)
     .last_rex_prefix = -1,
     .last_seg_prefix = -1,
     .fwait_prefix = -1,
+    .sse2_used = 0
   };
   char op_out[MAX_OPERANDS][100];
 
@@ -9891,6 +9908,7 @@ print_insn (bfd_vma pc, disassemble_info *info, int intel_syntax)
       }
 
   for (i = 0; i < MAX_OPERANDS; i++)
+  {
     if (ins.op_index[i] != -1 && ins.op_riprel[i])
       {
 	i386_dis_printf (&ins, dis_style_comment_start, "        # ");
@@ -9898,8 +9916,23 @@ print_insn (bfd_vma pc, disassemble_info *info, int intel_syntax)
 	  ((bfd_vma)(ins.start_pc + (ins.codep - ins.start_codep)
 		     + ins.op_address[ins.op_index[i]]),
 	  info);
+    if(ins.sse2_used)
+    {
+      i386_dis_printf (&ins,
+                       dis_style_text, ", %s",
+                       "SSE2 Used");
+      ins.sse2_used = 0;
+    }
 	break;
       }
+  }
+    if(ins.sse2_used)
+      i386_dis_printf (&ins,
+                       dis_style_comment_start,
+                       "        # SSE2 Used");
+
+
+
   return ins.codep - priv.the_buffer;
 }
 
@@ -12567,7 +12600,8 @@ OP_MMX (instr_info *ins, int bytemode ATTRIBUTE_UNUSED,
   ins->used_prefixes |= (ins->prefixes & PREFIX_DATA);
   if (ins->prefixes & PREFIX_DATA)
     {
-      names = att_names_xmm;
+      ins->sse2_used = 1;
+      names = att_names_sse2_xmm;
       USED_REX (REX_R);
       if (ins->rex & REX_R)
 	reg += 8;
@@ -12647,8 +12681,13 @@ print_vector_reg (instr_info *ins, unsigned int reg, int bytemode)
 	  abort ();
 	}
     }
+  else if (ins->need_vex)
+	  names = att_names_xmm;
   else
-    names = att_names_xmm;
+    {
+	  ins->sse2_used = 1;
+	  names = att_names_sse2_xmm;
+    }
   oappend_register (ins, names[reg]);
 }
 
@@ -12702,7 +12741,8 @@ OP_EM (instr_info *ins, int bytemode, int sizeflag)
   reg = ins->modrm.rm;
   if (ins->prefixes & PREFIX_DATA)
     {
-      names = att_names_xmm;
+      ins->sse2_used = 1;
+      names = att_names_sse2_xmm;
       USED_REX (REX_B);
       if (ins->rex & REX_B)
 	reg += 8;
@@ -13211,13 +13251,14 @@ CMPXCHG8B_Fixup (instr_info *ins, int bytemode, int sizeflag)
 static void
 XMM_Fixup (instr_info *ins, int reg, int sizeflag ATTRIBUTE_UNUSED)
 {
-  const char *const *names = att_names_xmm;
+  const char *const *names = att_names_sse2_xmm;
 
   if (ins->need_vex)
     {
       switch (ins->vex.length)
 	{
 	case 128:
+      names = att_names_xmm;
 	  break;
 	case 256:
 	  names = att_names_ymm;
@@ -13226,6 +13267,8 @@ XMM_Fixup (instr_info *ins, int reg, int sizeflag ATTRIBUTE_UNUSED)
 	  abort ();
 	}
     }
+  else
+      ins->sse2_used = 1;
   oappend_register (ins, names[reg]);
 }
 

@@ -1215,7 +1215,7 @@ read_a_source_file (const char *name)
 			 if it encountered a catastrophic failure.  */
 		      if (input_line_pointer == NULL)
 			as_fatal (_("unable to continue with assembly."));
- 
+
 		      *input_line_pointer++ = nul_char;
 
 		      /* We resume loop AFTER the end-of-line from
@@ -1633,7 +1633,7 @@ read_symbol_name (void)
   char * name;
   char * start;
   char c;
-
+  wchar_t unused[128];
   c = *input_line_pointer++;
 
   if (c == '"')
@@ -1667,7 +1667,7 @@ read_symbol_name (void)
       /* Since quoted symbol names can contain non-ASCII characters,
 	 check the string and warn if it cannot be recognised by the
 	 current character set.  */
-      if (mbstowcs (NULL, name, len) == (size_t) -1)
+      if (mbstowcs (unused, name, len) == (size_t) -1)
 	as_warn (_("symbol name not recognised in the current locale"));
     }
   else if (is_name_beginner (c) || (input_from_string && c == FAKE_LABEL_CHAR))
@@ -5845,7 +5845,7 @@ s_incbin (int x ATTRIBUTE_UNUSED)
 	  as_bad (_("unable to include `%s'"), path);
 	  goto done;
 	}
-      
+
       register_dependency (path);
 
       /* Compute the length of the file.  */
